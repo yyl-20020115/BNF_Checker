@@ -5,65 +5,43 @@
 var VERSION = "1.4";
 var DEBUG = false;
 
-var fn = "";
+var FileName = "";
 //Preferences:
-var do_report = false;
-var do_print_text = false;
-var do_print_html = false;
-var do_sort = false;
-var do_print_index = false;
-var tab_size = 4;
-var print_file_name = false;
-var print_source = false;
-var print_context = false;
-var warn_invalid_id = false; //using <ID> in place of ID
-var warn_invalid_rule_terminator = false; //using . in place of ;
-var warn_invalid_eq = false; // # using := or ::= in place of =
-var warn_invalid_unquoted_lit_str = false;
+var DoReport = false;
+var DoPrintText = false;
+var DoPrintHtml = false;
+var DoSort = false;
+var DoPrintIndex = false;
+var TabSize = 4;
+var PrintFileName = false;
+var PrintSource = false;
+var PrintContext = false;
+var WarnInvalidID = false; //using <ID> in place of ID
+var WarnInvalidRuleTerminator = false; //using . in place of ;
+var WarnInvalidEq = false; // # using := or ::= in place of =
+var WarnUnquatedLitString = false;
 
-var ids = new List<Identifier>();
-var decls = new List<Decl>();
+var IdsList = new List<Identifier>();
+var DeclarationsList = new List<Declaration>();
 
-StreamReader fd = null;
-var line = ""; //current line being parsed
-var line_n = 0; //current line no.First line is the no. 1 
-var line_idx = 0; //offset of the current char in line
-var line_pos = 0; //text editor idea of the position of the current char *
-var c = '\0'; //current char to be parsed, or NIL if end of the file 
-var sym = Symbol.sym_eof; //current symbol
-var s = ""; //ID or literal string, depending on the value of 's'
+var TextReader = default(StreamReader);
+var Line = ""; //current line being parsed
+var Line_N = 0; //current line no.First line is the no. 1 
+var Line_Index = 0; //offset of the current char in line
+var Line_Pos = 0; //text editor idea of the position of the current char *
+var CurrentChar = '\0'; //current char to be parsed, or NIL if end of the file 
+var CurrentSymbol = Symbol.EOF; //current symbol
+var CurrentString = ""; //ID or literal string, depending on the value of 's'
 
-void ids_report()
-{
-    print_text("IDs report:\n");
-    for (var i = 0; i < ids.Count; i++)
-    {
-        var id = ids[i];
-        if (!id.defined || id.used == 0)
-        {
-            print_text(id.name + ": ");
-            if (id.defined)
-            {
-                print_text("defined in line " + id.defined_in_line + ", ");
-            }
-            else
-            {
-                print_text("NOT DEFINED, ");
-            }
-            if (id.used > 0)
-            {
-                print_text("used " + (id.used) + " times\n");
-            }
-            else
-            {
-                print_text("NOT USED\n");
-            }
-        }
-    }
-}
+string String2HTML(string s)
+    => s.Replace("&", "&amp;")
+    .Replace("<", "&lt;")
+    .Replace(">", "&gt;")
+    .Replace("\n", "<br>\n")
+    ;
 void Help()
 {
-    prints(
+    Prints(
         "bnf_chk " + VERSION + " - EBNF syntax checker\n" +
         "Usage: bnf_chk {OPTION} file\n" +
         "\n" +
@@ -81,75 +59,86 @@ void Help()
 }
 void Version()
 {
-    print_text("bnf_chk " + VERSION + " - EBNF syntax checker\n");
-    print_text("Copyright 2006 by icosaedro.it di Umberto Salsi <salsi@icosaedro.it>\n");
-    print_text("More info: http://www.icosaedro.it/bnf_chk/index.html\n");
+    PrintText("bnf_chk " + VERSION + " - EBNF syntax checker\n");
+    PrintText("Copyright 2006 by icosaedro.it di Umberto Salsi <salsi@icosaedro.it>\n");
+    PrintText("More info: http://www.icosaedro.it/bnf_chk/index.html\n");
 }
-string String2HTML(string s)
-    => s.Replace("&", "&amp;")
-    .Replace("<", "&lt;")
-    .Replace(">", "&gt;")
-    .Replace("\n", "<br>\n")
-    ;
-int print(char c)
+void ReportIds()
+{
+    PrintText("IDs report:\n");
+    for (var i = 0; i < IdsList.Count; i++)
+    {
+        var id = IdsList[i];
+        if (!id.IsDefined || id.Used == 0)
+        {
+            PrintText(id.Name + ": ");
+            if (id.IsDefined)
+            {
+                PrintText("defined in line " + id.IsInlineDefined + ", ");
+            }
+            else
+            {
+                PrintText("NOT DEFINED, ");
+            }
+            if (id.Used > 0)
+            {
+                PrintText("used " + (id.Used) + " times\n");
+            }
+            else
+            {
+                PrintText("NOT USED\n");
+            }
+        }
+    }
+}
+int Print_(char c)
 {
     Console.Write(c);
     return 0;
 }
-int prints(string s)
+int Prints(string s)
 {
     Console.Write(s);
     return 0;
 }
-int message(string msg_type, string s)
+int Message(string msg_type, string s)
 {
-    if (print_context)
+    if (PrintContext)
     {
-        print_text("\n\t" + line + "\n\t" + new string(' ', line_pos - 1) + "\\_ HERE\n");
+        PrintText("\n\t" + Line + "\n\t" + new string(' ', Line_Pos - 1) + "\\_ HERE\n");
     }
-    if (print_file_name)
+    if (PrintFileName)
     {
-        print_text(fn + ": ");
+        PrintText(FileName + ": ");
 
     }
-    print_text("" + line_n + ":" + line_pos + ": ");
-    if (do_print_html)
+    PrintText("" + Line_N + ":" + Line_Pos + ": ");
+    if (DoPrintHtml)
     {
-        prints("<b>");
+        Prints("<b>");
     }
-    print_text(msg_type + ": " + s + "\n");
-    if (do_print_html)
+    PrintText(msg_type + ": " + s + "\n");
+    if (DoPrintHtml)
     {
-        prints("</b>");
+        Prints("</b>");
     }
     return 0;
 }
-int warning(string s)
-{
-    return message("Warning", s);
-}
-int exit(int n)
+int Exit(int n)
 {
     Environment.Exit(n);
     return n;
 }
-int err(string s)
+int Warning(string s) => Message("Warning", s);
+int Error(string s) => Message("ERROR", s);
+int Fatal(string s)
 {
-    return message("ERROR", s);
+    var r = Message("FATAL", s);
+    return Exit(1);
 }
-int error(string s)
+void PrintText(string s)
 {
-    return err(s);
-}
-int fatal(string s)
-{
-    var r = message("FATAL", s);
-    exit(1);
-    return r;
-}
-void print_text(string s)
-{
-    if (do_print_html)
+    if (DoPrintHtml)
     {
         s = String2HTML(s)
             .Replace("\t", "    ")
@@ -161,199 +150,515 @@ void print_text(string s)
 }
 void PrintLineSource()
 {
-    print_text(line_n.ToString());
-    print_text(":\t");
-    print_text(line);
-    print_text("\n");
+    PrintText(Line_N.ToString());
+    PrintText(":\t");
+    PrintText(Line??String.Empty);
+    PrintText("\n");
 }
-char read_ch()
+char ReadChar()
 {
     //update line_n, line_pos:
-    if (c == '\0')
+    if (CurrentChar == '\0')
     {
 
     }
-    else if (c == '\t')
+    else if (CurrentChar == '\t')
     {
-        line_pos += tab_size;
+        Line_Pos += TabSize;
     }
-    else if (c == '\n')
+    else if (CurrentChar == '\n')
     {
-        line_n++;
-        line_pos = 1;
+        Line_N++;
+        Line_Pos = 1;
     }
     else
     {
-        line_pos++;
+        Line_Pos++;
     }
 
     //get next char 'c' and update line_idx:
-    if (string.IsNullOrEmpty(line))
+    if (string.IsNullOrEmpty(Line))
     {
-        c = '\0';
+        CurrentChar = '\0';
     }
-    else if (line_idx < line.Length)
+    else if (Line_Index < Line.Length)
     {
-        c = line[line_idx];
-        line_idx++;
+        CurrentChar = Line[Line_Index];
+        Line_Index++;
     }
-    else if (line_idx == line.Length)
+    else if (Line_Index == Line.Length)
     {
-        c = '\n';
-        line_idx++;
+        CurrentChar = '\n';
+        Line_Index++;
     }
-    line = fd?.ReadLine();
-    if (line == null)
+    Line = TextReader?.ReadLine();
+    if (Line == null)
     {
-        c = '\0';
+        CurrentChar = '\0';
     }
-    else if (line.Length == 0)
+    else if (Line.Length == 0)
     {
-        c = '\n';
+        CurrentChar = '\n';
     }
     else
     {
-        c = line[0];
+        CurrentChar = Line[0];
     }
-    line_idx = 1;
-    if (print_source && (!string.IsNullOrEmpty(line)))
+    Line_Index = 1;
+    if (PrintSource && (!string.IsNullOrEmpty(Line)))
     {
         PrintLineSource();
     }
 
-
     if (DEBUG)
     {
-        print(c);
+        Print_(CurrentChar);
     }
-    return c;
+    return CurrentChar;
 }
-Identifier? add_id(string name, bool decl)
+Symbol ReadSymbol()
+{
+    while ((CurrentChar == ' ') || (CurrentChar == '\t') || (CurrentChar == '#') || (CurrentChar == '\n') || (CurrentChar == '\r'))
+    {
+        if (CurrentChar == '#')
+        {
+            while (true)
+            {
+                ReadChar();
+                if (CurrentChar == '\n' || CurrentChar == '\0')
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            ReadChar();
+        }
+    }
+    if (CurrentChar == '\0')
+    {
+        CurrentSymbol = Symbol.EOF;
+    }
+    else if (IsIdStartLetter(CurrentChar))
+    {
+        CurrentString = CurrentChar.ToString();
+        while (true)
+        {
+            ReadChar();
+            if (IsIdLetter(CurrentChar))
+            {
+                CurrentString += CurrentChar;
+            }
+            else
+            {
+                break;
+            }
+        }
+        if (WarnInvalidID)
+        {
+            if (!WarnUnquatedLitString)
+            {
+                WarnUnquatedLitString = true;
+                Warning("guessed usage of the syntax style <ID> for IDs and STRING for literal strings -- trying to continue anyway");
+            }
+            CurrentString = "\"" + CurrentString + "\"";
+            CurrentSymbol = Symbol.String;
+        }
+        else
+        {
+            CurrentSymbol = Symbol.Name;
+        }
+    }
+    else if (CurrentChar == '<')
+    {
+        CurrentString = "";
+        while (true)
+        {
+            ReadChar();
+            if (!IsIdLetter(CurrentChar) || CurrentChar == '-' || CurrentChar == ' ')
+            {
+                if (CurrentChar == ' ' || CurrentChar == '-') CurrentChar = '_';
+                CurrentString += CurrentChar;
+            }
+            else if (CurrentChar == '>')
+            {
+                if (!WarnInvalidID)
+                {
+                    WarnInvalidID = true;
+                    Warning("invalid identifier syntax `<SOME ID>' -- please use `SOME_ID' instead");
+                }
+                ReadChar();
+                break;
+            }
+            else
+            {
+                Fatal("invalid char in <identifier>");
+            }
+        }
+        CurrentSymbol = Symbol.Name;
+    }
+    else if (CurrentChar == '=')
+    {
+        CurrentSymbol = Symbol.Equal;
+        ReadChar();
+    }
+    else if (CurrentChar == ':')
+    {
+        ReadChar();
+        if (CurrentChar == '=')
+        {
+            WarnInvalidEqFunction(":=");
+            ReadChar();
+            CurrentSymbol = Symbol.Equal;
+        }
+        else if (CurrentChar == ':')
+        {
+            ReadChar();
+            if (CurrentChar == '=')
+            {
+                WarnInvalidEqFunction("::=");
+                ReadChar();
+                CurrentSymbol = Symbol.Equal;
+            }
+            else
+            {
+                Fatal("invalid character or symbol");
+            }
+        }
+        else
+            Fatal("invalid character or symbol");
+    }
+    else if (CurrentChar == '|')
+    {
+        CurrentSymbol = Symbol.Vbar;
+        ReadChar();
+    }
+    else if (CurrentChar == '{')
+    {
+        CurrentSymbol = Symbol.LBrace;
+        ReadChar();
+    }
+    else if (CurrentChar == '}')
+    {
+        CurrentSymbol = Symbol.RBrace;
+        ReadChar();
+    }
+    else if (CurrentChar == '[')
+    {
+        CurrentSymbol = Symbol.LSquare;
+        ReadChar();
+    }
+    else if (CurrentChar == ']')
+    {
+        CurrentSymbol = Symbol.RSquare;
+        ReadChar();
+    }
+    else if (CurrentChar == '(')
+    {
+        CurrentSymbol = Symbol.LRound;
+        ReadChar();
+    }
+    else if (CurrentChar == ')')
+    {
+        CurrentSymbol = Symbol.RRound;
+        ReadChar();
+    }
+    else if (CurrentChar == ';')
+    {
+        CurrentSymbol = Symbol.Semicolon;
+        ReadChar();
+    }
+    else if (CurrentChar == '\"')
+    {
+        CurrentString = ReadLitString();
+        CurrentSymbol = Symbol.String;
+    }
+    else if (CurrentChar == '.')
+    {
+        ReadChar();
+        if (CurrentChar == '.')
+        {
+            ReadChar();
+            CurrentSymbol = Symbol.Range;
+        }
+        else
+        {
+            if (!WarnInvalidRuleTerminator)
+            {
+                WarnInvalidRuleTerminator = true;
+                Warning("invalid rule terminator `.' -- please use `;' instead");
+            }
+            CurrentSymbol = Symbol.Semicolon;
+            ReadChar();
+        }
+    }
+    else if (CurrentChar > ' ')
+    {
+        Error("unexpected character `" + CurrentChar + "' -- trying to continue anyway");
+        CurrentString = CurrentChar.ToString();
+        ReadChar();
+
+        while (CurrentChar > ' ')
+        {
+            CurrentString += CurrentChar;
+
+            ReadChar();
+
+        }
+        CurrentString = "\"" + CurrentString + "\"";//# FIXME: special chars must be escaped
+        CurrentSymbol = Symbol.String;
+    }
+    else
+    {
+        Error("unexpected control char -- trying to continue anyway");
+        CurrentSymbol = Symbol.String;
+    }
+    return CurrentSymbol;
+}
+Identifier? AddId(string name, bool decl)
 {
     Identifier? id = null;
-    for (var i = 0; i < ids.Count; i++)
+    for (var i = 0; i < IdsList!.Count; i++)
     {
-        if (ids[i].name == name)
+        if (IdsList[i].Name == name)
         {
-            id = ids[i];
+            id = IdsList[i];
         }
     }
     if (id == null)
     {
-        id = new Identifier();
+        id = new Identifier
+        {
+            Name = name
+        };
         if (decl)
         {
-            id.name = name;
-            id.defined = true;
-            id.defined_in_line = line_n;
-            id.used = 0;
+            id.IsDefined = true;
+            id.IsInlineDefined = Line_N;
+            id.Used = 0;
         }
         else
         {
-            id.name = name;
-            id.defined = false;
-            id.defined_in_line = 0;
-            id.used++;
+            id.Name = name;
+            id.IsDefined = false;
+            id.IsInlineDefined = 0;
+            id.Used++;
         }
-        ids.Add(id);
+        IdsList.Add(id);
     }
     else
     {
         if (decl)
         {
-            if (id.defined)
+            if (id.IsDefined)
             {
-                fatal("id `" + name + "' already defined in line "
-                    + id.defined_in_line);
+                Fatal("id `" + name + "' already defined in line "
+                    + id.IsInlineDefined);
             }
             else
             {
                 //ichiarazione di un ID gia' usato prima: 
-                id.defined = true;
-                id.defined_in_line = line_n;
+                id.IsDefined = true;
+                id.IsInlineDefined = Line_N;
             }
         }
         else
         {
-            id.used++;
+            id.Used++;
         }
     }
     return id;
 }
-int hex(char c)
+int GetHexValue(char c)
     => c >= '0' && c <= '9'
     ? c - '0' : c >= 'A' && c <= 'F'
     ? c - 'A' + 10 : c >= 'a' && c <= 'f' ? c - 'a' + 10
-    : fatal("invalid hexadecimal digit `" + c + "'");
-void WarnInvalidEq(string s)
+    : Fatal("invalid hexadecimal digit `" + c + "'");
+void WarnInvalidEqFunction(string s)
 {
-    if (!warn_invalid_eq)
+    if (!WarnInvalidEq)
     {
-        warn_invalid_eq = true;
-        warning("invalid `" + s + "' symbol -- please use `=' instead");
+        WarnInvalidEq = true;
+        Warning("invalid `" + s + "' symbol -- please use `=' instead");
     }
 }
-void print_as_html(List<Decl> decls)
+void PrintExprAsText(Node d)
+{
+    if (d.Type == NodeType.Name)
+    {
+        PrintText(" " + d.Id.Name);
+        if (DoPrintIndex)
+        {
+            int index = d.Id.Index;
+            if (index == 0)
+                Prints("_?");
+            else
+                Prints("_" + (index));
+        }
+    }
+    else if (d.Type == NodeType.QuotedName)
+        Prints(" " + d.Text);
+    else if (d.Type == NodeType.Repeats)
+    {
+        Prints(" {");
+        PrintExprAsText(d.OtherNode);
+        Prints(" }");
+    }
+    else if (d.Type == NodeType.Optional)
+    {
+        Prints(" [");
+        PrintExprAsText(d.OtherNode);
+        Prints(" ]");
+    }
+    else if (d.Type == NodeType.Product)
+    {
+        for (int i = 0; i < d.SubNodes.Count; i++)
+        {
+            if (d.SubNodes[i].Type == NodeType.Alternatives)
+            {
+                Prints(" (");
+                PrintExprAsText(d.SubNodes[i]);
+                Prints(" )");
+            }
+            else
+            {
+                PrintExprAsText(d.SubNodes[i]);
+            }
+        }
+    }
+    else if (d.Type == NodeType.Alternatives)
+    {
+        for (int i = 0; i < d.SubNodes.Count; i++)
+        {
+            if (i > 0)
+                Prints(" |");
+            PrintExprAsText(d.SubNodes[i]);
+        }
+    }
+    else
+    {
+        Error("internal error (1)\n");
+        Exit(1);
+    }
+}
+void PrintExprAsHtml(Node d)
+{
+    if (d.Type == NodeType.Name)
+    {
+        Prints(" <i>" + d.Id.Name + "</i>");
+        if (DoPrintIndex)
+        {
+            int index = d.Id.Index;
+            if (index == 0)
+                Prints("<sub>?</sub>");
+            else
+                Prints("<sub>" + (index) + "</sub>");
+        }
+    }
+    else if (d.Type == NodeType.QuotedName)
+        Prints(" <code><b>" + String2HTML(d.Text) + "</b></code>");
+    else if (d.Type == NodeType.Repeats)
+    {
+        Prints(" {");
+        PrintExprAsText(d.OtherNode);
+        Prints(" }");
+    }
+    if (d.Type == NodeType.Optional)
+    {
+        Prints(" [");
+        PrintExprAsText(d.OtherNode);
+        Prints(" ]");
+    }
+    if (d.Type == NodeType.Product)
+    {
+        for (int i = 0; i < d.SubNodes.Count; i++)
+        {
+            if (d.SubNodes[i].Type == NodeType.Alternatives)
+            {
+                Prints(" (");
+                PrintExprAsText(d.SubNodes[i]);
+                Prints(" )");
+            }
+            else
+            {
+                PrintExprAsText(d.SubNodes[i]);
+            }
+        }
+    }
+    if (d.Type == NodeType.Alternatives)
+    {
+        for (int i = 0; i < d.SubNodes.Count; i++)
+        {
+            if (i > 0)
+                Prints(" |");
+            PrintExprAsText(d.SubNodes[i]);
+        }
+    }
+    else
+    {
+        Error("internal error (1)\n");
+        Exit(1);
+    }
+}
+void PrintAsHtml(List<Declaration> decls)
 {
     for (int i = 0; i < decls.Count; i++)
     {
-        if (do_print_index)
+        if (DoPrintIndex)
         {
-            prints(i + 1 + ". ");
+            Prints(i + 1 + ". ");
         }
         var d = decls[i];
-        prints(d.id.name);
-        prints(" = ");
-        print_expr(d.n);
-        prints(" ;<br>\n");
+        Prints(d.Id.Name);
+        Prints(" = ");
+        PrintExprAsHtml(d.Node);
+        Prints(" ;<br>\n");
     }
 }
-void print_as_text(List<Decl> decls)
+void PrintAsText(List<Declaration> decls)
 {
     for (int i = 0; i < decls.Count; i++)
     {
-        if (do_print_index)
+        if (DoPrintIndex)
         {
-            prints(i + 1 + ". ");
+            Prints(i + 1 + ". ");
         }
         var d = decls[i];
-        prints(d.id.name);
-        prints(" = ");
-        print_expr(d.n);
-        prints(" ;\n");
+        Prints(d.Id.Name);
+        Prints(" = ");
+        PrintExprAsText(d.Node);
+        Prints(" ;\n");
     }
 }
-int DeclComparison(Decl x, Decl y)
-{
-    return string.Compare(x.id.name, y.id.name);
-}
-void sort_decls(List<Decl> decls)
+int DeclComparison(Declaration x, Declaration y) => string.Compare(x.Id.Name, y.Id.Name);
+void SortDeclarations(List<Declaration> decls)
 {
     decls.Sort(DeclComparison);
     for (int i = 0; i < decls.Count; i++)
     {
-        decls[i].id.index = i;
+        decls[i].Id.Index = i;
     }
 }
-string read_lit_string()
+string ReadLitString()
 {
     var s = "\"";
     var d1 = 0;
     var d2 = 0;
-    read_ch();
+    ReadChar();
     while (true)
     {
-        switch (c)
+        switch (CurrentChar)
         {
             case '\0':
-                fatal("unclosed literal string");
+                Fatal("unclosed literal string");
                 break;
             case '\"':
                 {
-                    read_ch();
+                    ReadChar();
                     if (s.Length == 1)
                     {
-                        fatal("invalid empty string");
+                        Fatal("invalid empty string");
                         return s + "\"";
                     }
                 }
@@ -361,46 +666,46 @@ string read_lit_string()
             case '\\':
                 {
                     s += "\\";
-                    read_ch();
-                    if (c == '\"' | c == '\\')
+                    ReadChar();
+                    if (CurrentChar == '\"' | CurrentChar == '\\')
                     {
-                        s += c;
-                        read_ch();
+                        s += CurrentChar;
+                        ReadChar();
                     }
-                    else if (c == 'a' || c == 'b' || c == 'n' || c == 'r' || c == 't')
+                    else if (CurrentChar == 'a' || CurrentChar == 'b' || CurrentChar == 'n' || CurrentChar == 'r' || CurrentChar == 't')
                     {
-                        s += c;
-                        read_ch();
+                        s += CurrentChar;
+                        ReadChar();
                     }
-                    else if (c == 'x')
+                    else if (CurrentChar == 'x')
                     {
                         s += "x";
-                        read_ch();
-                        d1 = hex(c);
-                        s += c;
-                        read_ch();
-                        d2 = hex(c);
-                        s += c;
-                        read_ch();
+                        ReadChar();
+                        d1 = GetHexValue(CurrentChar);
+                        s += CurrentChar;
+                        ReadChar();
+                        d2 = GetHexValue(CurrentChar);
+                        s += CurrentChar;
+                        ReadChar();
                         s += (char)(d1 << 4 + d2);
                         //s = s + CHR(16*d1+d2)
                     }
                     else
                     {
-                        fatal("invalid escape sequence \"\\" + c + "\"");
+                        Fatal("invalid escape sequence \"\\" + CurrentChar + "\"");
                     }
                 }
                 break;
             default:
-                if (c >= ' ' && c != 127)
+                if (CurrentChar >= ' ' && CurrentChar != 127)
                 {
-                    s += c;
-                    read_ch();
+                    s += CurrentChar;
+                    ReadChar();
                 }
                 else
                 {
-                    err("invalid control character code " + c + " in literal string -- possible unclosed string");
-                    read_ch();
+                    Error("invalid control character code " + CurrentChar + " in literal string -- possible unclosed string");
+                    ReadChar();
                     return s + "\"";
 
                 }
@@ -408,17 +713,166 @@ string read_lit_string()
         }
     }
 }
+Declaration ReadDeclaration()
+{
+    Declaration d = new();
+
+    if (CurrentSymbol != Symbol.Name)
+        Fatal("expected rule name");
+
+    d.Id = AddId(CurrentString, true);
+    ReadSymbol();
+    if (CurrentSymbol != Symbol.Equal)
+        Fatal("expected `='");
+
+    ReadSymbol();
+    d.Node = ReadExpr();
+    if (CurrentSymbol != Symbol.Semicolon)
+        Error("unexpected symbol -- check possible missing `;' in the rule above");
+    ReadSymbol();
+    return d;
+}
+List<Declaration> ReadDeclarations()
+{
+    int index = 0;
+    Declaration decl = new();
+
+    Line_N = 1;
+    Line_Pos = 0;
+    Line = TextReader.ReadLine();
+
+    CurrentChar = '\0';
+    if (PrintSource)
+        PrintLineSource();
+
+    ReadChar();
+    ReadSymbol();
+    while (CurrentSymbol != Symbol.EOF)
+    {
+        decl = ReadDeclaration();
+        index++;
+        decl.Id.Index = index;
+        DeclarationsList!.Add(decl);
+    }
+    return DeclarationsList;
+}
+Node ReadExpr()
+{
+    Node e, s = new();
+    e = ReadTerminal();
+    if (CurrentSymbol == Symbol.Vbar)
+    {
+        s.Type = NodeType.Alternatives;
+        s.SubNodes.Add(e);
+        e = s;
+    }
+    while (CurrentSymbol == Symbol.Vbar)
+    {
+        ReadSymbol();
+        e.SubNodes.Add(ReadTerminal());
+    }
+    return e;
+}
+Node ReadFactor()
+{
+    Node f = new();
+    if (CurrentSymbol == Symbol.LRound)
+    {
+        ReadSymbol();
+        f = ReadExpr();
+        if (CurrentSymbol != Symbol.RRound)
+        {
+            Fatal("expected `)'");
+        }
+        ReadSymbol();
+    }
+    else if (CurrentSymbol == Symbol.LSquare)
+    {
+        f.Type = NodeType.Optional;
+        ReadSymbol();
+        f.OtherNode = ReadExpr();
+        if (CurrentSymbol != Symbol.RSquare)
+            Fatal("expected `]'");
+        ReadSymbol();
+    }
+    else if (CurrentSymbol == Symbol.LBrace)
+    {
+        f.Type = NodeType.Repeats;
+        ReadSymbol();
+        f.OtherNode = ReadExpr();
+        if (CurrentSymbol != Symbol.RBrace)
+            Fatal("expected `}'");
+        ReadSymbol();
+    }
+    else if (CurrentSymbol == Symbol.Name)
+    {
+        f.Type = NodeType.Name;
+        f.Id = AddId(CurrentString, false);
+        ReadSymbol();
+    }
+    else if (CurrentSymbol == Symbol.String)
+    {
+        f.Type = NodeType.QuotedName;
+        //f[s] = StringToLiteral(s)
+        f.Text = CurrentString;
+        ReadSymbol();
+        if (CurrentSymbol == Symbol.Range)
+        {
+            ReadSymbol();
+            if (CurrentSymbol != Symbol.String)
+                Fatal("expected string after range separator");
+            //##f[s] = f[s] + ".." + StringToLiteral(s)
+            f.Text += (".." + CurrentString);
+            ReadSymbol();
+        }
+    }
+    else
+        return null;
+    return f;
+}
+Node ReadTerminal()
+{
+    Node f = new(), p2 = new(), p = new();
+
+    //Il primo fattore e' obbligatorio: 
+    p = ReadFactor();
+    if (p == null)
+        Fatal("expected factor");
+    //Se c'e' un secondo fattore, allora e' un prodotto: 
+    f = ReadFactor();
+    if (f == null)
+        return p;
+
+    p2.Type = NodeType.Product;
+    p2.SubNodes[0] = p;
+    p2.SubNodes[1] = f;
+
+    p = p2;
+    //Vedi se ci sono altri fattori: 
+    while (true)
+    {
+        f = ReadFactor();
+        if (f == null)
+            return p;
+        p.SubNodes.Add(f);
+
+    }
+}
+bool IsIdLetter(char c)
+    => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= '0' && c <= '9';
+bool IsIdStartLetter(char c)
+    => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
 int Main(string[] args)
 {
     //Default preferences:
-    tab_size = 8;
-    do_sort = false;
-    do_report = false;
-    do_print_text = false;
-    do_print_html = false;
-    print_file_name = true;
-    print_source = false;
-    print_context = false;
+    TabSize = 8;
+    DoSort = false;
+    DoReport = false;
+    DoPrintText = false;
+    DoPrintHtml = false;
+    PrintFileName = true;
+    PrintSource = false;
+    PrintContext = false;
 
     for (int i = 0; i < args.Length; i++)
     {
@@ -431,589 +885,126 @@ int Main(string[] args)
                 Version();
                 break;
             case "--sort":
-                do_sort = true;
+                DoSort = true;
                 break;
             case "--report":
-                do_report = true;
+                DoReport = true;
                 break;
             case "--print-text":
-                do_print_text = true;
+                DoPrintText = true;
                 break;
             case "--print-html":
-                do_print_html = true;
+                DoPrintHtml = true;
                 break;
             case "--print-index":
-                do_print_index = true;
+                DoPrintIndex = true;
                 break;
             case "--no-print-file-name":
-                print_file_name = false;
+                PrintFileName = false;
                 break;
             case "--print-source":
-                print_source = true;
+                PrintSource = true;
                 break;
             case "--print-context":
-                print_context = true;
+                PrintContext = true;
                 break;
             default:
                 if (args[i].Length > 0 && args[i][0] == '-')
                 {
-                    error("ERROR: unknown option " + args[i] + "\n");
-                    exit(1);
+                    Error("ERROR: unknown option " + args[i] + "\n");
+                    Exit(1);
                 }
                 else
                 {
-                    if (fn != null)
+                    if (FileName != null)
                     {
-                        error("ERROR: parameter " + args[i]
-                        + ": file name already set to " + fn + "\n");
-                        error("Please type \"bnf_chk --help\" for a complete list of the available options\n");
-                        exit(1);
+                        Error("ERROR: parameter " + args[i]
+                        + ": file name already set to " + FileName + "\n");
+                        Error("Please type \"bnf_chk --help\" for a complete list of the available options\n");
+                        Exit(1);
                     }
-                    fn = args[i];
+                    FileName = args[i];
                 }
                 break;
         }
 
     }
-    if (fn == null)
+    if (FileName == null)
     {
-        error("ERROR: required file name\n");
-        exit(1);
+        Error("ERROR: required file name\n");
+        Exit(1);
 
     }
-    ids.Clear();
-    decls.Clear();
-    read_decls(fn);
-    if (do_report)
+    IdsList.Clear();
+    DeclarationsList.Clear();
+
+    using (TextReader = File.OpenText(FileName))
     {
-        ids_report();
+        ReadDeclarations();
     }
-    if (do_sort)
+    if (DoReport)
     {
-        sort_decls(decls);
+        ReportIds();
     }
-    if (do_print_text)
+    if (DoSort)
     {
-        print_as_text(decls);
+        SortDeclarations(DeclarationsList);
     }
-    if (do_print_html)
+    if (DoPrintText)
     {
-        print_as_html(decls);
+        PrintAsText(DeclarationsList);
+    }
+    if (DoPrintHtml)
+    {
+        PrintAsHtml(DeclarationsList);
     }
     return 0;
 }
-Decl read_decl()
-{
-    Decl d = new();
-
-    if (sym != Symbol.sym_name)
-        fatal("expected rule name");
-
-    d.id = add_id(s, true);
-    read_sym();
-    if (sym != Symbol.sym_eq)
-        fatal("expected `='");
-
-    read_sym();
-    d.n = read_expr();
-    if (sym != Symbol.sym_semicolon)
-        err("unexpected symbol -- check possible missing `;' in the rule above");
-    read_sym();
-    return d;
-}
-void read_decls(string fn)
-{
-    int index = 0;
-    Decl decl;
-
-    fd = File.OpenText(fn);
-    line_n = 1;
-    line_pos = 0;
-    line = fd.ReadLine();
-
-    c = '\0';
-    if (print_source)
-        PrintLineSource();
-
-    read_ch();
-    read_sym();
-    while (sym != Symbol.sym_eof)
-    {
-        decl = read_decl();
-        index++;
-        decl.id.index = index;
-        decls.Add(decl);
-    }
-}
-Node read_expr()
-{
-    Node e, s = new();
-    e = read_termin();
-    if (sym == Symbol.sym_vbar)
-    {
-        s.type = NodeType.or;
-        s.a.Add(e);
-        e = s;
-    }
-    while (sym == Symbol.sym_vbar)
-    {
-        read_sym();
-        e.a.Add(read_termin());
-    }
-    return e;
-}
-Node read_factor()
-{
-    Node f = null;
-    Symbol sym = Symbol.sym_eof;
-    if (sym == Symbol.sym_lround)
-    {
-        read_sym();
-        f = read_expr();
-        if (sym != Symbol.sym_rround)
-        {
-            fatal("expected `)'");
-        }
-        read_sym();
-    }
-    else if (sym == Symbol.sym_lsquare)
-    {
-        f.type = NodeType.opt;
-        read_sym();
-        f.n = read_expr();
-        if (sym != Symbol.sym_rsquare)
-            fatal("expected `]'");
-        read_sym();
-    }
-    else if (sym == Symbol.sym_lbrace)
-    {
-        f.type = NodeType.repeat;
-        read_sym();
-        f.n = read_expr();
-        if (sym != Symbol.sym_rbrace)
-            fatal("expected `}'");
-        read_sym();
-    }
-    else if (sym == Symbol.sym_name)
-    {
-        f.type = NodeType.box;
-        f.id = add_id(s, false);
-        read_sym();
-    }
-    else if (sym == Symbol.sym_string)
-    {
-        f.type = NodeType.roundbox;
-        //f[s] = StringToLiteral(s)
-        f.s = s;
-        read_sym();
-        if (sym == Symbol.sym_range)
-        {
-            read_sym();
-            if (sym != Symbol.sym_string)
-                fatal("expected string after range separator");
-            //##f[s] = f[s] + ".." + StringToLiteral(s)
-            f.s += (".." + s);
-            read_sym();
-        }
-    }
-    else
-        return null;
-    return f;
-}
-Node read_termin()
-{
-    Node f = new(), p2 = new(), p = new();
-
-    //Il primo fattore e' obbligatorio: 
-    p = read_factor();
-    if (p == null)
-        fatal("expected factor");
-    //Se c'e' un secondo fattore, allora e' un prodotto: 
-    f = read_factor();
-    if (f == null)
-        return p;
-
-    p2.type = NodeType.prod;
-    p2.a[0] = p;
-    p2.a[1] = f;
-
-    p = p2;
-    //Vedi se ci sono altri fattori: 
-    while (true)
-    {
-        f = read_factor();
-        if (f == null)
-            return p;
-        p.a.Add(f);
-
-    }
-}
-void print_expr(Node d)
-{
-    if (d.type == NodeType.box)
-    {
-        print_text(" " + d.id.name);
-        if (do_print_index)
-        {
-            int index = d.id.index;
-            if (index == 0)
-                prints("_?");
-            else
-                prints("_" + (index));
-        }
-    }
-    else if (d.type == NodeType.roundbox)
-        prints(" " + d.s);
-    else if (d.type == NodeType.repeat)
-    {
-        prints(" {");
-        print_expr(d.n);
-        prints(" }");
-    }
-    else if (d.type == NodeType.opt)
-    {
-        prints(" [");
-        print_expr(d.n);
-        prints(" ]");
-    }
-    else if (d.type == NodeType.prod)
-    {
-        for (int i = 0; i < d.a.Count; i++)
-        {
-            if (d.a[i].type == NodeType.or)
-            {
-                prints(" (");
-                print_expr(d.a[i]);
-                prints(" )");
-            }
-            else
-            {
-                print_expr(d.a[i]);
-            }
-        }
-    }
-    else if (d.type == NodeType.or)
-    {
-        for (int i = 0; i < d.a.Count; i++)
-        {
-            if (i > 0)
-                prints(" |");
-            print_expr(d.a[i]);
-        }
-    }
-    else
-    {
-        error("internal error (1)\n");
-        exit(1);
-    }
-}
-void print_expr_html(Node d)
-{
-    if (d.type == NodeType.box)
-    {
-        prints(" <i>" + d.id.name + "</i>");
-        if (do_print_index)
-        {
-            int index = d.id.index;
-            if (index == 0)
-                prints("<sub>?</sub>");
-            else
-                prints("<sub>" + (index) + "</sub>");
-        }
-    }
-    else if (d.type == NodeType.roundbox)
-        prints(" <code><b>" + String2HTML(d.s) + "</b></code>");
-    else if (d.type == NodeType.repeat)
-    {
-        prints(" {");
-        print_expr(d.n);
-        prints(" }");
-    }
-    if (d.type == NodeType.opt)
-    {
-        prints(" [");
-        print_expr(d.n);
-        prints(" ]");
-    }
-    if (d.type == NodeType.prod)
-    {
-        for (int i = 0; i < d.a.Count; i++)
-        {
-            if (d.a[i].type == NodeType.or)
-            {
-                prints(" (");
-                print_expr(d.a[i]);
-                prints(" )");
-            }
-            else
-            {
-                print_expr(d.a[i]);
-            }
-        }
-    }
-    if (d.type == NodeType.or)
-    {
-        for (int i = 0; i < d.a.Count; i++)
-        {
-            if (i > 0)
-                prints(" |");
-            print_expr(d.a[i]);
-        }
-    }
-    else
-    {
-        error("internal error (1)\n");
-        exit(1);
-    }
-}
-
-bool is_id_letter(char c)
-    => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_' || c >= '0' && c <= '9';
-bool is_id_start_letter(char c)
-    => c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_';
-void read_sym()
-{
-    while ((c == ' ') || (c == '\t') || (c == '#') || (c == '\n') || (c == '\r'))
-    {
-        if (c == '#')
-        {
-            while (true)
-            {
-                read_ch();
-                if (c == '\n' || c == '\0')
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            read_ch();
-        }
-    }
-    if (c == '\0')
-    {
-        sym = Symbol.sym_eof;
-    }
-    else if (is_id_start_letter(c))
-    {
-        s = c.ToString();
-        while (true)
-        {
-            read_ch();
-            if (is_id_letter(c))
-            {
-                s += c;
-            }
-            else
-            {
-                break;
-            }
-        }
-        if (warn_invalid_id)
-        {
-            if (!warn_invalid_unquoted_lit_str)
-            {
-                warn_invalid_unquoted_lit_str = true;
-                warning("guessed usage of the syntax style <ID> for IDs and STRING for literal strings -- trying to continue anyway");
-            }
-            s = "\"" + s + "\"";
-            sym = Symbol.sym_string;
-        }
-        else
-        {
-            sym = Symbol.sym_name;
-        }
-    }
-    else if (c == '<')
-    {
-        s = "";
-        while (true)
-        {
-            read_ch();
-            if (!is_id_letter(c) || c == '-' || c == ' ')
-            {
-                if (c == ' ' || c == '-') c = '_';
-                s += c;
-            }
-            else if (c == '>')
-            {
-                if (!warn_invalid_id)
-                {
-                    warn_invalid_id = true;
-                    warning("invalid identifier syntax `<SOME ID>' -- please use `SOME_ID' instead");
-                }
-                read_ch();
-                break;
-            }
-            else
-            {
-                fatal("invalid char in <identifier>");
-            }
-        }
-        sym = Symbol.sym_name;
-    }
-    else if (c == '=')
-    {
-        sym = Symbol.sym_eq;
-        read_ch();
-    }
-    else if (c == ':')
-    {
-        read_ch();
-        if (c == '=')
-        {
-            WarnInvalidEq(":=");
-            read_ch();
-            sym = Symbol.sym_eq;
-        }
-        else if (c == ':')
-        {
-            read_ch();
-            if (c == '=')
-            {
-                WarnInvalidEq("::=");
-                read_ch();
-                sym = Symbol.sym_eq;
-            }
-            else
-            {
-                fatal("invalid character or symbol");
-            }
-        }
-        else
-            fatal("invalid character or symbol");
-    }
-    else if (c == '|')
-    {
-        sym = Symbol.sym_vbar;
-        read_ch();
-    }
-    else if (c == '{')
-    {
-        sym = Symbol.sym_lbrace;
-        read_ch();
-    }
-    else if (c == '}')
-    {
-        sym = Symbol.sym_rbrace;
-        read_ch();
-    }
-    else if (c == '[')
-    {
-        sym = Symbol.sym_lsquare;
-        read_ch();
-    }
-    else if (c == ']')
-    {
-        sym = Symbol.sym_rsquare;
-        read_ch();
-    }
-    else if (c == '(')
-    {
-        sym = Symbol.sym_lround;
-        read_ch();
-    }
-    else if (c == ')')
-    {
-        sym = Symbol.sym_rround;
-        read_ch();
-    }
-    else if (c == ';')
-    {
-        sym = Symbol.sym_semicolon;
-        read_ch();
-    }
-    else if (c == '\"')
-    {
-        s = read_lit_string();
-        sym = Symbol.sym_string;
-    }
-    else if (c == '.')
-    {
-        read_ch();
-        if (c == '.')
-        {
-            read_ch();
-            sym = Symbol.sym_range;
-        }
-        else
-        {
-            if (!warn_invalid_rule_terminator)
-            {
-                warn_invalid_rule_terminator = true;
-                warning("invalid rule terminator `.' -- please use `;' instead");
-            }
-            sym = Symbol.sym_semicolon;
-            read_ch();
-        }
-    }
-    else if (c > ' ')
-    {
-        err("unexpected character `" + c + "' -- trying to continue anyway");
-        s = c.ToString();
-        read_ch();
-
-        while (c > ' ')
-        {
-            s += c;
-
-            read_ch();
-
-        }
-        s = "\"" + s + "\"";//# FIXME: special chars must be escaped
-        sym = Symbol.sym_string;
-    }
-    else
-    {
-        err("unexpected control char -- trying to continue anyway");
-        sym = Symbol.sym_string;
-    }
-}
-
+//Entry Point
+return Main(args);
 public class Identifier
 {
-    public string name = "";
-    public bool defined = false;
-    public int defined_in_line = 0;
-    public int index = 0;
-    public int used = 0;
+    public string Name = "";
+    public bool IsDefined = false;
+    public int IsInlineDefined = 0;
+    public int Index = 0;
+    public int Used = 0;
 }
 public enum NodeType : uint
 {
-    box = 0,//rule name - ex. A
-    roundbox = 1,//literal string - ex. "PRINT"
-    prod = 2,//product of factors - ex. A B C
-    or = 3,//alternatives terms - ex. A|B|C
-    repeat = 4,//zero or more times - ex. {A}
-    opt = 5,//optional - ex. [A]
+    Name = 0,//rule name - ex. A
+    QuotedName = 1,//literal string - ex. "PRINT"
+    Product = 2,//product of factors - ex. A B C
+    Alternatives = 3,//alternatives terms - ex. A|B|C
+    Repeats = 4,//zero or more times - ex. {A}
+    Optional = 5,//optional - ex. [A]
 }
 public class Node
 {
-    public Identifier id = new();
-    public NodeType type = NodeType.box;
-    public string s = "";
-    public Node n = new();
-    public List<Node> a = new();
+    public Identifier Id = new();
+    public NodeType Type = NodeType.Name;
+    public string Text = "";
+    public Node OtherNode = new();
+    public List<Node> SubNodes = new();
 }
-public class Decl
+public class Declaration
 {
-    public Identifier id = new();
-    public Node n = new();
+    public Identifier Id = new();
+    public Node Node = new();
 }
 public enum Symbol : uint
 {
-    sym_eof = 0,
-    sym_semicolon = 1,
-    sym_name = 2,
-    sym_eq = 3,
-    sym_lbrace = 4,
-    sym_rbrace = 5,
-    sym_lsquare = 6,
-    sym_rsquare = 7,
-    sym_lround = 8,
-    sym_rround = 9,
-    sym_vbar = 10,
-    sym_string = 11,
-    sym_range = 12,
+    EOF = 0,
+    Semicolon = 1,
+    Name = 2,
+    Equal = 3,
+    LBrace = 4,
+    RBrace = 5,
+    LSquare = 6,
+    RSquare = 7,
+    LRound = 8,
+    RRound = 9,
+    Vbar = 10,
+    String = 11,
+    Range = 12,
 }
