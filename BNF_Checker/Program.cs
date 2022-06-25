@@ -103,7 +103,7 @@ int Prints(string s)
     Console.Write(s);
     return 0;
 }
-int Message(string msg_type, string s)
+int Message(string message_type, string s)
 {
     if (PrintContext)
     {
@@ -118,7 +118,7 @@ int Message(string msg_type, string s)
     {
         Prints("<b>");
     }
-    PrintText(msg_type + ": " + s + "\n");
+    PrintText(message_type + ": " + s + "\n");
     if (DoPrintHtml)
     {
         Prints("</b>");
@@ -130,24 +130,24 @@ int Exit(int n)
     Environment.Exit(n);
     return n;
 }
-int Warning(string s) => Message("Warning", s);
-int Error(string s) => Message("ERROR", s);
-int Fatal(string s)
+int Warning(string text) => Message("Warning", text);
+int Error(string text) => Message("ERROR", text);
+int Fatal(string text)
 {
-    var r = Message("FATAL", s);
+    var r = Message("FATAL", text);
     return Exit(1);
 }
-void PrintText(string s)
+void PrintText(string text)
 {
     if (DoPrintHtml)
     {
-        s = String2HTML(s)
+        text = String2HTML(text)
             .Replace("\t", "    ")
             .Replace(" ", "&nbsp;")
             ;
-        s = "<code>" + s + "</code>";
+        text = "<code>" + text + "</code>";
     }
-    Console.Write(s);
+    Console.Write(text);
 }
 void PrintLineSource()
 {
@@ -422,7 +422,7 @@ Symbol ReadSymbol()
 Identifier AddId(string? name, bool decl)
 {
     name ??= "";
-    Identifier? id = IdsList!.FirstOrDefault(i => i.Name == name);
+    var id = IdsList!.FirstOrDefault(i => i.Name == name);
     if (id == null)
     {
         id = new Identifier
@@ -471,65 +471,65 @@ int GetHexValue(char c)
     ? c - '0' : c >= 'A' && c <= 'F'
     ? c - 'A' + 10 : c >= 'a' && c <= 'f' ? c - 'a' + 10
     : Fatal("invalid hexadecimal digit `" + c + "'");
-void WarnInvalidEqFunction(string s)
+void WarnInvalidEqFunction(string text)
 {
     if (!WarnInvalidEq)
     {
         WarnInvalidEq = true;
-        Warning("invalid `" + s + "' symbol -- please use `=' instead");
+        Warning("invalid `" + text + "' symbol -- please use `=' instead");
     }
 }
-void PrintExprAsText(Node d)
+void PrintExprAsText(Node node)
 {
-    if (d.Type == NodeType.Name)
+    if (node.Type == NodeType.Name)
     {
-        PrintText(" " + d.Id.Name);
+        PrintText(" " + node.Id.Name);
         if (DoPrintIndex)
         {
-            int index = d.Id.Index;
+            int index = node.Id.Index;
             if (index == 0)
                 Prints("_?");
             else
                 Prints("_" + (index));
         }
     }
-    else if (d.Type == NodeType.QuotedName)
-        Prints(" " + d.Text);
-    else if (d.Type == NodeType.Repeats)
+    else if (node.Type == NodeType.QuotedName)
+        Prints(" " + node.Text);
+    else if (node.Type == NodeType.Repeats)
     {
         Prints(" {");
-        PrintExprAsText(d.NextNode);
+        PrintExprAsText(node.NextNode);
         Prints(" }");
     }
-    else if (d.Type == NodeType.Optional)
+    else if (node.Type == NodeType.Optional)
     {
         Prints(" [");
-        PrintExprAsText(d.NextNode);
+        PrintExprAsText(node.NextNode);
         Prints(" ]");
     }
-    else if (d.Type == NodeType.Product)
+    else if (node.Type == NodeType.Product)
     {
-        for (int i = 0; i < d.SubNodes.Count; i++)
+        for (int i = 0; i < node.SubNodes.Count; i++)
         {
-            if (d.SubNodes[i].Type == NodeType.Alternatives)
+            if (node.SubNodes[i].Type == NodeType.Alternatives)
             {
                 Prints(" (");
-                PrintExprAsText(d.SubNodes[i]);
+                PrintExprAsText(node.SubNodes[i]);
                 Prints(" )");
             }
             else
             {
-                PrintExprAsText(d.SubNodes[i]);
+                PrintExprAsText(node.SubNodes[i]);
             }
         }
     }
-    else if (d.Type == NodeType.Alternatives)
+    else if (node.Type == NodeType.Alternatives)
     {
-        for (int i = 0; i < d.SubNodes.Count; i++)
+        for (int i = 0; i < node.SubNodes.Count; i++)
         {
             if (i > 0)
                 Prints(" |");
-            PrintExprAsText(d.SubNodes[i]);
+            PrintExprAsText(node.SubNodes[i]);
         }
     }
     else
@@ -597,43 +597,43 @@ void PrintExprAsHtml(Node d)
         Exit(1);
     }
 }
-void PrintAsHtml(List<Declaration> decls)
+void PrintAsHtml(List<Declaration> declarationsList)
 {
-    for (int i = 0; i < decls.Count; i++)
+    for (int i = 0; i < declarationsList.Count; i++)
     {
         if (DoPrintIndex)
         {
             Prints(i + 1 + ". ");
         }
-        var d = decls[i];
+        var d = declarationsList[i];
         Prints(d.Id.Name);
-        Prints(" = ");
+        Prints(" =");
         PrintExprAsHtml(d.Node);
-        Prints(" ;<br>\n");
+        Prints(";<br>\n");
     }
 }
-void PrintAsText(List<Declaration> decls)
+void PrintAsText(List<Declaration> declarationsList)
 {
-    for (int i = 0; i < decls.Count; i++)
+    for (int i = 0; i < declarationsList.Count; i++)
     {
         if (DoPrintIndex)
         {
             Prints(i + 1 + ". ");
         }
-        var d = decls[i];
+        var d = declarationsList[i];
         Prints(d.Id.Name);
-        Prints(" = ");
+        Prints(" =");
         PrintExprAsText(d.Node);
-        Prints(" ;\n");
+        Prints(";\n");
     }
 }
 int DeclComparison(Declaration x, Declaration y) => string.Compare(x.Id.Name, y.Id.Name);
-void SortDeclarations(List<Declaration> decls)
+void SortDeclarations(List<Declaration> declarationsList)
 {
-    decls.Sort(DeclComparison);
-    for (int i = 0; i < decls.Count; i++)
+    declarationsList.Sort(DeclComparison);
+    for (int i = 0; i < declarationsList.Count; i++)
     {
-        decls[i].Id.Index = i;
+        declarationsList[i].Id.Index = i;
     }
 }
 string ReadLitString()
@@ -682,7 +682,7 @@ string ReadLitString()
                         d2 = GetHexValue(CurrentChar);
                         s += CurrentChar;
                         ReadChar();
-                        s += (char)(d1 << 4 + d2);
+                        //s += (char)(d1 << 4 + d2);
                         //s = s + CHR(16*d1+d2)
                     }
                     else
@@ -751,7 +751,7 @@ List<Declaration> ReadDeclarations()
     }
     return DeclarationsList!;
 }
-Node ReadExpr()
+Node? ReadExpr()
 {
     var s = new Node();
     var e = ReadTerminal();
@@ -770,7 +770,7 @@ Node ReadExpr()
 }
 Node? ReadFactor()
 {
-    Node f = new();
+    var f = new Node();
     if (CurrentSymbol == Symbol.LRound)
     {
         ReadSymbol();
@@ -827,29 +827,31 @@ Node? ReadFactor()
 }
 Node ReadTerminal()
 {
-    Node f = new(), p2 = new(), p = new();
+    Node? f = null;
+    Node? p1 = null;
+    Node? p2 = new();
 
     //Il primo fattore e' obbligatorio: 
-    p = ReadFactor();
-    if (p == null)
+    p1 = ReadFactor();
+    if (p1 == null)
         Fatal("expected factor");
     //Se c'e' un secondo fattore, allora e' un prodotto: 
     f = ReadFactor();
     if (f == null)
-        return p!;
+        return p1!;
 
     p2.Type = NodeType.Product;
-    p2.SubNodes.Add(p!);
+    p2.SubNodes.Add(p1!);
     p2.SubNodes.Add(f!);
 
-    p = p2;
+    p1 = p2;
     //Vedi se ci sono altri fattori: 
     while (true)
     {
         f = ReadFactor();
         if (f == null)
-            return p;
-        p.SubNodes.Add(f);
+            return p1;
+        p1.SubNodes.Add(f);
 
     }
 }
