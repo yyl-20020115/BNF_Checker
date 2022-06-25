@@ -2,6 +2,8 @@
 //Copyright 2006 by icosaedro.it di Umberto Salsi <salsi @icosaedro.it>
 //Info: http://www.icosaedro.it/bnf_chk/index.html
 
+using System.Linq;
+
 var VERSION = "1.4";
 var DEBUG = false;
 
@@ -66,10 +68,10 @@ void Version()
 void ReportIds()
 {
     PrintText("IDs report:\n");
-    for (var i = 0; i < IdsList.Count; i++)
+    for (var i = 0; i < IdsList!.Count; i++)
     {
         var id = IdsList[i];
-        if (!id.IsDefined || id.Used == 0)
+        //if (!id.IsDefined || id.Used == 0)
         {
             PrintText(id.Name + ": ");
             if (id.IsDefined)
@@ -107,12 +109,11 @@ int Message(string msg_type, string s)
     {
         PrintText("\n\t" + Line + "\n\t" + new string(' ', Line_Pos - 1) + "\\_ HERE\n");
     }
-    if (PrintFileName)
+    if (!string.IsNullOrEmpty(FileName) && PrintFileName)
     {
         PrintText(FileName + ": ");
-
+        PrintText("" + Line_N + ":" + Line_Pos + ": ");
     }
-    PrintText("" + Line_N + ":" + Line_Pos + ": ");
     if (DoPrintHtml)
     {
         Prints("<b>");
@@ -146,7 +147,7 @@ void PrintText(string s)
             ;
         s = "<code>" + s + "</code>";
     }
-    Console.WriteLine(s);
+    Console.Write(s);
 }
 void PrintLineSource()
 {
@@ -177,7 +178,7 @@ char ReadChar()
     }
 
     //get next char 'c' and update line_idx:
-    if (string.IsNullOrEmpty(Line))
+    if (Line == null)
     {
         CurrentChar = '\0';
     }
@@ -191,25 +192,27 @@ char ReadChar()
         CurrentChar = '\n';
         Line_Index++;
     }
-    Line = TextReader?.ReadLine();
-    if (Line == null)
-    {
-        CurrentChar = '\0';
-    }
-    else if (Line.Length == 0)
-    {
-        CurrentChar = '\n';
-    }
     else
     {
-        CurrentChar = Line[0];
+        Line = TextReader?.ReadLine();
+        if (Line == null)
+        {
+            CurrentChar = '\0';
+        }
+        else if (Line.Length == 0)
+        {
+            CurrentChar = '\n';
+        }
+        else
+        {
+            CurrentChar = Line[0];
+        }
+        Line_Index = 1;
+        if (PrintSource && (!string.IsNullOrEmpty(Line)))
+        {
+            PrintLineSource();
+        }
     }
-    Line_Index = 1;
-    if (PrintSource && (!string.IsNullOrEmpty(Line)))
-    {
-        PrintLineSource();
-    }
-
     if (DEBUG)
     {
         Print_(CurrentChar);
@@ -416,16 +419,10 @@ Symbol ReadSymbol()
     }
     return CurrentSymbol;
 }
-Identifier? AddId(string name, bool decl)
+Identifier AddId(string? name, bool decl)
 {
-    Identifier? id = null;
-    for (var i = 0; i < IdsList!.Count; i++)
-    {
-        if (IdsList[i].Name == name)
-        {
-            id = IdsList[i];
-        }
-    }
+    name ??= "";
+    Identifier? id = IdsList!.FirstOrDefault(i => i.Name == name);
     if (id == null)
     {
         id = new Identifier
@@ -440,12 +437,11 @@ Identifier? AddId(string name, bool decl)
         }
         else
         {
-            id.Name = name;
             id.IsDefined = false;
             id.IsInlineDefined = 0;
             id.Used++;
         }
-        IdsList.Add(id);
+        IdsList!.Add(id);
     }
     else
     {
@@ -502,13 +498,13 @@ void PrintExprAsText(Node d)
     else if (d.Type == NodeType.Repeats)
     {
         Prints(" {");
-        PrintExprAsText(d.OtherNode);
+        PrintExprAsText(d.NextNode);
         Prints(" }");
     }
     else if (d.Type == NodeType.Optional)
     {
         Prints(" [");
-        PrintExprAsText(d.OtherNode);
+        PrintExprAsText(d.NextNode);
         Prints(" ]");
     }
     else if (d.Type == NodeType.Product)
@@ -561,16 +557,16 @@ void PrintExprAsHtml(Node d)
     else if (d.Type == NodeType.Repeats)
     {
         Prints(" {");
-        PrintExprAsText(d.OtherNode);
+        PrintExprAsText(d.NextNode);
         Prints(" }");
     }
-    if (d.Type == NodeType.Optional)
+    else if (d.Type == NodeType.Optional)
     {
         Prints(" [");
-        PrintExprAsText(d.OtherNode);
+        PrintExprAsText(d.NextNode);
         Prints(" ]");
     }
-    if (d.Type == NodeType.Product)
+    else if (d.Type == NodeType.Product)
     {
         for (int i = 0; i < d.SubNodes.Count; i++)
         {
@@ -586,7 +582,7 @@ void PrintExprAsHtml(Node d)
             }
         }
     }
-    if (d.Type == NodeType.Alternatives)
+    else if (d.Type == NodeType.Alternatives)
     {
         for (int i = 0; i < d.SubNodes.Count; i++)
         {
@@ -659,10 +655,9 @@ string ReadLitString()
                     if (s.Length == 1)
                     {
                         Fatal("invalid empty string");
-                        return s + "\"";
                     }
+                    return s + "\"";
                 }
-                break;
             case '\\':
                 {
                     s += "\\";
@@ -715,27 +710,26 @@ string ReadLitString()
 }
 Declaration ReadDeclaration()
 {
-    Declaration d = new();
+    var declaration = new Declaration();
 
     if (CurrentSymbol != Symbol.Name)
         Fatal("expected rule name");
 
-    d.Id = AddId(CurrentString, true);
+    declaration.Id = AddId(CurrentString, true);
     ReadSymbol();
     if (CurrentSymbol != Symbol.Equal)
         Fatal("expected `='");
 
     ReadSymbol();
-    d.Node = ReadExpr();
+    declaration.Node = ReadExpr();
     if (CurrentSymbol != Symbol.Semicolon)
         Error("unexpected symbol -- check possible missing `;' in the rule above");
     ReadSymbol();
-    return d;
+    return declaration;
 }
 List<Declaration> ReadDeclarations()
 {
-    int index = 0;
-    Declaration decl = new();
+    Declaration declaration = new();
 
     Line_N = 1;
     Line_Pos = 0;
@@ -747,19 +741,20 @@ List<Declaration> ReadDeclarations()
 
     ReadChar();
     ReadSymbol();
+    int index = 0;
     while (CurrentSymbol != Symbol.EOF)
     {
-        decl = ReadDeclaration();
+        declaration = ReadDeclaration();
         index++;
-        decl.Id.Index = index;
-        DeclarationsList!.Add(decl);
+        declaration.Id.Index = index;
+        DeclarationsList!.Add(declaration);
     }
-    return DeclarationsList;
+    return DeclarationsList!;
 }
 Node ReadExpr()
 {
-    Node e, s = new();
-    e = ReadTerminal();
+    var s = new Node();
+    var e = ReadTerminal();
     if (CurrentSymbol == Symbol.Vbar)
     {
         s.Type = NodeType.Alternatives;
@@ -773,7 +768,7 @@ Node ReadExpr()
     }
     return e;
 }
-Node ReadFactor()
+Node? ReadFactor()
 {
     Node f = new();
     if (CurrentSymbol == Symbol.LRound)
@@ -790,7 +785,7 @@ Node ReadFactor()
     {
         f.Type = NodeType.Optional;
         ReadSymbol();
-        f.OtherNode = ReadExpr();
+        f.NextNode = ReadExpr();
         if (CurrentSymbol != Symbol.RSquare)
             Fatal("expected `]'");
         ReadSymbol();
@@ -799,7 +794,7 @@ Node ReadFactor()
     {
         f.Type = NodeType.Repeats;
         ReadSymbol();
-        f.OtherNode = ReadExpr();
+        f.NextNode = ReadExpr();
         if (CurrentSymbol != Symbol.RBrace)
             Fatal("expected `}'");
         ReadSymbol();
@@ -814,7 +809,7 @@ Node ReadFactor()
     {
         f.Type = NodeType.QuotedName;
         //f[s] = StringToLiteral(s)
-        f.Text = CurrentString;
+        f.Text = CurrentString??"";
         ReadSymbol();
         if (CurrentSymbol == Symbol.Range)
         {
@@ -841,11 +836,11 @@ Node ReadTerminal()
     //Se c'e' un secondo fattore, allora e' un prodotto: 
     f = ReadFactor();
     if (f == null)
-        return p;
+        return p!;
 
     p2.Type = NodeType.Product;
-    p2.SubNodes[0] = p;
-    p2.SubNodes[1] = f;
+    p2.SubNodes.Add(p!);
+    p2.SubNodes.Add(f!);
 
     p = p2;
     //Vedi se ci sono altri fattori: 
@@ -911,14 +906,14 @@ int Main(string[] args)
             default:
                 if (args[i].Length > 0 && args[i][0] == '-')
                 {
-                    Error("ERROR: unknown option " + args[i] + "\n");
+                    Error("unknown option " + args[i] + "\n");
                     Exit(1);
                 }
                 else
                 {
-                    if (FileName != null)
+                    if (!string.IsNullOrEmpty(FileName))
                     {
-                        Error("ERROR: parameter " + args[i]
+                        Error("parameter " + args[i]
                         + ": file name already set to " + FileName + "\n");
                         Error("Please type \"bnf_chk --help\" for a complete list of the available options\n");
                         Exit(1);
@@ -929,11 +924,11 @@ int Main(string[] args)
         }
 
     }
-    if (FileName == null)
+    if (string.IsNullOrEmpty(FileName))
     {
-        Error("ERROR: required file name\n");
+        //Error("required file name\n");
+        Help();
         Exit(1);
-
     }
     IdsList.Clear();
     DeclarationsList.Clear();
@@ -969,6 +964,7 @@ public class Identifier
     public int IsInlineDefined = 0;
     public int Index = 0;
     public int Used = 0;
+    public override string ToString() => $"{Name}({IsInlineDefined},{Index},{Used})";
 }
 public enum NodeType : uint
 {
@@ -984,13 +980,16 @@ public class Node
     public Identifier Id = new();
     public NodeType Type = NodeType.Name;
     public string Text = "";
-    public Node OtherNode = new();
+    public Node? NextNode =null;
     public List<Node> SubNodes = new();
+    public string SubNodeTexts => string.Join(',', (IEnumerable<Node>)this.SubNodes.ToArray());
+    public override string ToString() => $"{Id}-{Text}({Type})[{this.SubNodeTexts}]";
 }
 public class Declaration
 {
     public Identifier Id = new();
     public Node Node = new();
+    public override string ToString() => $"{this.Id} : {this.Node}";
 }
 public enum Symbol : uint
 {

@@ -1,0 +1,19 @@
+# The EBNF syntax allowed by bnf_chk.
+
+# A BNF file is a sequence of zero or more rules:
+bnf_file = { rule };
+rule = identifier "=" expression ";" ;
+identifier = ( letter | "_" ) { letter | digit | "_"  } ;
+letter = "a".."z" | "A".."Z" ;
+digit = "0".."9" ;
+expression = term { "|" term } ;
+term = factor { factor } ;
+factor = identifier | literal | range | "(" expression ")"
+	| "{" expression "}" | "[" expression "]" ;
+literal = "\"" { char } "\"" ;
+range = "\"" char "\"" ".." "\"" char "\"" ;
+char = plain_char | escaped_char | hex_char;
+plain_char = "\x20".."\x7F" | "\x80".."\xFF";
+escaped_char = "\\" ("\"" | "\\" | "a" | "b" | "n" | "r" | "t");
+hex_char = "\\x" hex hex;
+hex = "0".."9" | "a".."f" | "A".."F";

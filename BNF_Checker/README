@@ -1,0 +1,26 @@
+bnf_chk - BNF Syntax Checker
+============================
+
+Copyright 2006 by Umberto Salsi <salsi@icosaedro.it>
+
+The source code of the program is written in the M2 programming language
+(http://www.icosaedro.it/m2). This package includes the binary executable,
+but if you need to recompile from the source, you will need the M2
+developing system too.
+
+To run the program, you need the conservative garbage collector libgc.a
+from Hans Boehm. It can be downloaded from:
+
+	http://www.hpl.hp.com/personal/Hans_Boehm/gc/
+
+Compile and install gc. On some systems this library is already installed:
+please check for the presence of the file libgc.a (locate libgc.a).
+
+Run the program with the option --help for a brief explanation of the
+other options.
+
+More info about the program:
+
+	http://www.icosaedro.it/bnf_chk/index.html
+
+Enjoy!

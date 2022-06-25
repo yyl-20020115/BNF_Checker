@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "BNF_Checker": {
+      "commandName": "Project",
+      "commandLineArgs": "--report --sort --print-text --print-html syntax.txt",
+      "workingDirectory": "$(ProjectDir)"
+    }
+  }
+}

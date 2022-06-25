@@ -1,0 +1,31 @@
+Version 1.4_20061107:
+====================
+- can display the source with line numbers
+- can display a line of context along the error message
+- new options: --print-source --print-context
+- fixed: displays properly plain text when mixed with HTML text
+
+Version 1.3_20061007:
+====================
+- commonly used escaped sequences "\a\b\n\r\t" now allowed in literal strings
+- literal strings now rendered exactly as they were entered
+
+Version 1.3_20060811:
+====================
+- Now available also as pure-C source for those who don't want to install M2.
+- Literal strings now allow for hexadecimal encoded chars \xHH.
+- Allows ASCII-extended charset.
+
+Version 1.2_20050405:
+====================
+- Executable file: fixed buf in the str module of M2.
+- The option --do-print-html now force all the output to be HTML.
+- The options --version and --help do not stop the program any more.
+
+Version 1.1_20040419:
+====================
+- Minor changes.
+
+Version 1.0_20040402:
+====================
+- First public release.
